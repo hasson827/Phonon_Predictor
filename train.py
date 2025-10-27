@@ -56,7 +56,7 @@ def train():
         print(f"Dataset loaded with {len(dataset)} materials.")
         param_count(model)
         
-    criterion = PhononLoss(mse_weight=0.8, smooth_weight=0.2)
+    criterion = PhononLoss(mse_weight=0.7, first_order_weight=0.2, second_order_weight=0.1)
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-5)
     
     # 先准备模型、数据加载器、损失函数和优化器
@@ -72,7 +72,7 @@ def train():
     
     for epoch in range(epochs):
         model.train()
-        total_loss, total_mse, total_smooth = 0, 0, 0
+        total_loss, total_mse, total_smooth1, total_smooth2 = 0, 0, 0, 0
         
         for batch_idx, (batch, material_ids) in enumerate(dataloader):
             graph_batch = batch['graph_batch']
@@ -81,23 +81,25 @@ def train():
             
             optimizer.zero_grad()
             pred_frequencies = model(graph_batch)     # 直接预测频率 [B,120,256]
-            loss, mse_loss, smooth_loss = criterion(pred_frequencies, true_frequencies, band_mask)
+            loss, mse_loss, smooth_loss1, smooth_loss2 = criterion(pred_frequencies, true_frequencies, band_mask)
             accelerator.backward(loss)
             optimizer.step()
             ema.update()
             
             total_loss += loss.item()
             total_mse += mse_loss.item()
-            total_smooth += smooth_loss.item()
-        
+            total_smooth1 += smooth_loss1.item()
+            total_smooth2 += smooth_loss2.item()
+
         avg_loss = total_loss / len(dataloader)
         avg_mse = total_mse / len(dataloader)
-        avg_smooth = total_smooth / len(dataloader)
-        
+        avg_smooth1 = total_smooth1 / len(dataloader)
+        avg_smooth2 = total_smooth2 / len(dataloader)
+
         # 打印训练日志
         if (epoch + 1) % log_epoch == 0 and accelerator.is_main_process:
-            print(f"Epoch {epoch+1}/{epochs} | Avg Loss: {avg_loss:.4f} | Avg Data Loss: {avg_mse:.4f} | Avg Smooth: {avg_smooth:.4f}")
-        
+            print(f"Epoch {epoch+1}/{epochs} | Avg Loss: {avg_loss:.4f} | Avg Data Loss: {avg_mse:.4f} | Avg Smooth1: {avg_smooth1:.4f} | Avg Smooth2: {avg_smooth2:.4f}")
+
         # 可视化部分样本
         if (epoch + 1) % vis_epoch == 0 and accelerator.is_main_process:
             model.eval()
