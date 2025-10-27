@@ -1,0 +1,9 @@
+torch
+torch_geometric
+h5py
+pymatgen
+tqdm
+mp-api
+numpy
+accelerate
+matplotlib
