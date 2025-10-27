@@ -27,7 +27,7 @@ def train():
     # 配置参数
     h5_path = os.path.join("Data", "materials_data.h5")
     epochs = 4000
-    batch_size = 256
+    batch_size = 128
     learning_rate = 3e-4
     log_epoch = 10  # 每隔多少个epoch打印一次日志
     vis_epoch = 50  # 每隔多少个epoch进行一次可视化
@@ -42,7 +42,7 @@ def train():
     # 模型参数
     node_feature_dim = 7
     edge_feature_dim = 1
-    hidden_dim = 1024
+    hidden_dim = 512
     
     model = PhononPredictor(
         node_dim=node_feature_dim,
