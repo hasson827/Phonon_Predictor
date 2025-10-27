@@ -1,5 +1,5 @@
 import os
-from utils import MaterialDataProcessor, MaterialDataset, create_dataloader
+from utils.data_util import MaterialDataProcessor, MaterialDataset, create_dataloader
 
 if __name__ == "__main__":
     api_key = "u8sNESP1M49d1bK6fC0jFor7O8ht1oXw"

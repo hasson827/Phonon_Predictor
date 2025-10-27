@@ -28,9 +28,9 @@ def train():
     h5_path = os.path.join("Data", "materials_data.h5")
     epochs = 4000
     batch_size = 128
-    learning_rate = 3e-4
-    log_epoch = 10  # 每隔多少个epoch打印一次日志
-    vis_epoch = 50  # 每隔多少个epoch进行一次可视化
+    learning_rate = 1e-4
+    log_epoch = 40  # 每隔多少个epoch打印一次日志
+    vis_epoch = 200  # 每隔多少个epoch进行一次可视化
     ema_decay = 0.999  # EMA衰减率
     
     # 创建模型保存和可视化目录
@@ -114,8 +114,11 @@ def train():
                 true_frequencies = batch['frequencies']
                 band_mask = batch['band_mask']
                 
+                best_model = torch.load(os.path.join(model_dir, "best_model.pt"), map_location=device)
+                unwrapped_model = accelerator.unwrap_model(model)
+                unwrapped_model.load_state_dict(best_model['model_state_dict'])
                 with torch.no_grad():
-                    pred_frequencies = model(graph_batch)
+                    pred_frequencies = unwrapped_model(graph_batch)
                 
                 # 选择前几个样本进行可视化
                 num_samples = min(5, len(material_ids))
