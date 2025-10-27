@@ -25,13 +25,17 @@ class PhononLoss(nn.Module):
         pred_diff1 = pred_f[..., 1:] - pred_f[..., :-1]   # [B, num_bands, L-1]
         true_diff1 = true_f[..., 1:] - true_f[..., :-1]
         mask1 = band_mask_exp.expand_as(pred_diff1)
-        smooth_loss1 = (torch.abs(pred_diff1 - true_diff1) * mask1).sum() / (mask1.sum() + self.eps)
+        diff_first = (pred_diff1 - true_diff1) ** 2
+        diff_norm1 = 0.5 * (pred_diff1 ** 2 + true_diff1 ** 2) + self.eps
+        smooth_loss1 = (diff_first / diff_norm1 * mask1).sum() / (mask1.sum() + self.eps)
 
         # ---------- 3. Second-order curvature loss ----------
         pred_diff2 = pred_f[..., 2:] - 2 * pred_f[..., 1:-1] + pred_f[..., :-2]  # [B, num_bands, L-2]
         true_diff2 = true_f[..., 2:] - 2 * true_f[..., 1:-1] + true_f[..., :-2]
         mask2 = band_mask_exp.expand_as(pred_diff2)
-        smooth_loss2 = (torch.abs(pred_diff2 - true_diff2) * mask2).sum() / (mask2.sum() + self.eps)
+        diff_second = (pred_diff2 - true_diff2) ** 2
+        diff_norm2 = 0.5 * (pred_diff2 ** 2 + true_diff2 ** 2) + self.eps
+        smooth_loss2 = (diff_second / diff_norm2 * mask2).sum() / (mask2.sum() + self.eps)
 
         # ---------- Total loss ----------
         total = (self.mse_weight * data_loss +
