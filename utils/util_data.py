@@ -46,7 +46,6 @@ def atom_feature(atomic_number: int, descriptor: str) -> float:
         elif descriptor == 'dp':
             return md_data.dip[atomic_number]
         else:
-            # 其余返回1, 构造one-hot编码
             return 1.0
 
 def create_node_input(atomic_numbers: list, descriptor: str) -> torch.Tensor:
