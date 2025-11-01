@@ -8,7 +8,6 @@ from ase import Atom
 from copy import copy
 import sklearn
 import time
-from tqdm import tqdm
 from config_file import palette, seedn, save_extension
 from utils.util_help import chemical_symbols, sub
 
@@ -121,7 +120,7 @@ def loss_dist_general(axl, df, num, palette, tile_losses, fontsize, axis='y'):
 def generate_dataframe(model, dataloader, loss_fn, device, factor=1000):
     df = pd.DataFrame(columns=['id', 'name', 'loss', 'real', 'pred', 'time', 'numb'])
     with torch.no_grad():
-        for d in tqdm(dataloader):
+        for d in dataloader:
             try:
                 d.to(device)
                 start_time = time.time()

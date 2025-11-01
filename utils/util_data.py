@@ -5,7 +5,6 @@ from ase.neighborlist import neighbor_list
 from torch_geometric.data import Data
 from ase import Atom
 import mendeleev as md
-from tqdm import tqdm
 
 class MD:
     def __init__(self):
@@ -111,6 +110,6 @@ def generate_data_dict(data, r_max, descriptor: str = 'mass', factor: int = 1000
     structures = data['structure']
     qptss = data['qpts']
     reals = data['real_band']
-    for id, structure, real, qpts in tqdm(zip(ids, structures, reals, qptss), total=len(ids), desc="Generating data"):
+    for id, structure, real, qpts in zip(ids, structures, reals, qptss):
         data_dict[id] = build_data(id, structure, real, r_max, qpts, descriptor, factor, **kwargs)
     return data_dict
