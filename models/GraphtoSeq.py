@@ -1,8 +1,6 @@
 
 import torch
 from torch import nn, Tensor
-from torch_geometric.data import Data
-from GraphEncoder import GraphEncoder
 
 
 class QPosMLP(nn.Module):
@@ -63,31 +61,3 @@ class Graph2SeqDecoder(nn.Module):
 		bands = self.pair_mlp(pair)  # [T, N, 3]
 		out = bands.reshape(T, 3 * N)
 		return out
-
-
-if __name__ == "__main__":
-	torch.set_default_dtype(torch.float64)
-
-	N = 5
-	E = 12
-	K = 50
-	T = 17
-	d = 32
-	Hs = 4
-
-	z = torch.zeros((N, 118), dtype=torch.get_default_dtype())
-	z[torch.arange(N), torch.randint(0, 118, (N,))] = 1.0
-	edge_index = torch.randint(0, N, (2, E))
-	edge_attr = torch.rand((E, K), dtype=torch.get_default_dtype())
-	edge_vec = torch.randn((E, 3), dtype=torch.get_default_dtype())
-
-	data = Data(z=z, edge_index=edge_index, edge_len=edge_attr, edge_vec=edge_vec)
-
-	enc = GraphEncoder(node_in_dim=118, d_model=d, num_layers=2, num_heads=Hs, edge_in_dim=K, use_z=True)
-	H = enc(data)  # [N, d]
-
-	qpts = torch.rand((T, 3), dtype=torch.get_default_dtype())
-	dec = Graph2SeqDecoder(d_model=d, num_heads=Hs, num_layers=2)
-	y = dec(H, qpts)
-	print(y.shape)  # expect [T, 3*N]
-

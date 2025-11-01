@@ -131,26 +131,3 @@ class GraphEncoder(nn.Module):
 					  edge_vec=edge_vec,
 					  num_nodes=num_nodes)
 		return x
-
-
-if __name__ == "__main__":
-	from torch_geometric.data import Data
-	torch.set_default_dtype(torch.float64)
-
-	N = 6
-	E = 12
-	K = 50
-	H = 4
-	d = 32
-
-	z = torch.zeros((N, 118), dtype=torch.get_default_dtype())
-	z[torch.arange(N), torch.randint(0, 118, (N,))] = 1.0
-	edge_index = torch.randint(0, N, (2, E))
-	edge_attr = torch.rand((E, K), dtype=torch.get_default_dtype())
-	edge_vec = torch.randn((E, 3), dtype=torch.get_default_dtype())
-
-	data = Data(z=z, edge_index=edge_index, edge_len=edge_attr, edge_vec=edge_vec)
-	enc = GraphEncoder(node_in_dim=118, d_model=d, num_layers=2, num_heads=H, edge_in_dim=K, use_z=True)
-	out = enc(data)
-	print(out.shape)
-
