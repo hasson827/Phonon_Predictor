@@ -19,10 +19,12 @@ class MD:
             self.dip[atomic_number] = ele.dipole_polarizability
 md_data = MD()
 
+
 def pkl_load(filename):
     with open(filename, 'rb') as file:
         loaded_dict = pkl.load(file)
     return loaded_dict
+
 
 def get_lattice_parameters(data):
     a = []
@@ -30,6 +32,7 @@ def get_lattice_parameters(data):
         d = data.iloc[i]
         a.append(d.structure.cell.cellpar()[:3])
     return np.stack(a)
+
 
 def atom_feature(atomic_number: int, descriptor: str) -> float:
     if descriptor == 'mass':
@@ -45,8 +48,9 @@ def atom_feature(atomic_number: int, descriptor: str) -> float:
             return md_data.ie[atomic_number]
         elif descriptor == 'dp':
             return md_data.dip[atomic_number]
-        else:
+        elif descriptor == 'one-hot':
             return 1.0
+
 
 def create_node_input(atomic_numbers: list, descriptor: str) -> torch.Tensor:
     x = []
@@ -56,6 +60,7 @@ def create_node_input(atomic_numbers: list, descriptor: str) -> torch.Tensor:
         x.append(vec)
     return torch.from_numpy(np.asarray(x, dtype=np.float64))
 
+
 def get_node_deg(edge_dst, n):
     node_deg = np.zeros((n, 1), dtype=np.float64)
     for dst in edge_dst:
@@ -63,24 +68,26 @@ def get_node_deg(edge_dst, n):
     node_deg += (node_deg == 0)
     return torch.from_numpy(node_deg)
 
-def build_data(mpid: str, structure, real: np.ndarray, r_max: float, qpts: np.ndarray, descriptor: str = 'mass', factor: int = 1000):
-    """
-    Build data object for graph-based learning models.
-    Args:
-        mpid (str): Material project ID.
-        structure (ase.atoms.Atoms): Atomic structure.
-        real (np.ndarray): Real values (e.g., band structure).
-        r_max (float): Cutoff radius for neighbor list.
-        qpts (np.ndarray): q-points.
-        descriptor (str, optional): Descriptor for node features.
-        factor (int, optional): Scaling factor for real values.
-    """
+
+def gaussian_expansion(edge_len: np.ndarray, K: int = 50,
+                       r_max: float = 8.0, sigma: float = 0.5) -> torch.Tensor:
+    if edge_len.size == 0:
+        return torch.zeros((0, K), dtype=torch.get_default_dtype())
+
+    centers = np.linspace(0.0, float(r_max), int(K), dtype=np.float64)
+    diff2 = (edge_len.reshape(-1, 1) - centers.reshape(1, -1)) ** 2
+    edge_attr = np.exp(-diff2 / (2.0 * (sigma ** 2)))
+    return torch.from_numpy(edge_attr) # [E, K]
+
+
+def build_data(mpid: str, structure, real: np.ndarray, r_max: float, qpts: np.ndarray, descriptor: str = 'mass', factor: int = 1000, **kwargs):
     symbols = structure.symbols
     positions = torch.from_numpy(structure.positions.copy())
     lattice = torch.from_numpy(structure.cell.array.copy()).unsqueeze(0)
     edge_src, edge_dst, edge_shift, edge_vec, edge_len = neighbor_list(
         "ijSDd", a = structure, cutoff = r_max, self_interaction = True
     )
+    edge_len = gaussian_expansion(edge_len, K=50, r_max=r_max, sigma=0.5)
     numb = len(positions)
     
     atomic_numbers = structure.arrays['numbers']
@@ -97,12 +104,13 @@ def build_data(mpid: str, structure, real: np.ndarray, r_max: float, qpts: np.nd
     data = Data(**data_dict)
     return data
 
-def generate_data_dict(data, r_max, descriptor: str = 'mass', factor: int = 1000):
+
+def generate_data_dict(data, r_max, descriptor: str = 'mass', factor: int = 1000, **kwargs):
     data_dict = dict()
     ids = data['id']
     structures = data['structure']
     qptss = data['qpts']
     reals = data['real_band']
     for id, structure, real, qpts in tqdm(zip(ids, structures, reals, qptss), total=len(ids), desc="Generating data"):
-        data_dict[id] = build_data(id, structure, real, r_max, qpts, descriptor, factor)
+        data_dict[id] = build_data(id, structure, real, r_max, qpts, descriptor, factor, **kwargs)
     return data_dict
