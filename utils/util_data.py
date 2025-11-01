@@ -97,8 +97,8 @@ def build_data(mpid: str, structure, real: np.ndarray, r_max: float, qpts: np.nd
     
     data_dict = {'id': mpid, 'pos': positions, 'lattice': lattice, 'symbol': symbols, 'z': z, 'x': x, 'y': y, 'node_deg': node_deg,
                  'edge_index': torch.stack([torch.LongTensor(edge_src), torch.LongTensor(edge_dst)], dim=0),
-                 'edge_vec': edge_vec.clone().detach().to(torch.float64), 'edge_len': edge_len.clone().detach().to(torch.float64), 
-                 'qpts': qpts.clone().detach().to(torch.float64), 'r_max': r_max, 'numb': numb}
+                 'edge_vec': torch.tensor(edge_vec, dtype=torch.float64), 'edge_len': edge_len.clone().detach().to(torch.float64), 
+                 'qpts': torch.tensor(qpts, dtype=torch.float64), 'r_max': r_max, 'numb': numb}
     data = Data(**data_dict)
     return data
 

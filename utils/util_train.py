@@ -69,7 +69,6 @@ def train(model, optimizer, train_set, train_nums, test_set,
             loss.backward()
             optimizer.step()
 
-            print(f"num {i+1:4d} / {len(train_loader)}, loss = {loss}, train time = {time.time() - start:.2f} s, end = '\r'")
         end_time = time.time()
         wall = end_time - start_time
         if step == checkpoint:
@@ -116,8 +115,8 @@ def train(model, optimizer, train_set, train_nums, test_set,
             
             df_train = generate_dataframe(model, train_loader, loss_fn, device, factor)
             df_test = generate_dataframe(model, test_loader, loss_fn, device, factor)
-            fit_train = plot_bands(df_train, header = save_name, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
-            fit_test = plot_bands(df_test, header = save_name, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
+            fig_train = plot_bands(df_train, header = save_name, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
+            fig_test = plot_bands(df_test, header = save_name, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
         
         text_file = open(save_name + ".txt", "w")
         for line in record_lines:
