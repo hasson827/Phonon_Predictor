@@ -33,7 +33,7 @@ To set up the environment locally and run the code:
 4. Train (run in background)
 
 	```bash
-	nohup python train.py > train.log 2>&1 &
+	bash train.sh
 	```
 
 	Training logs will be written to `train.log`. Model checkpoints are saved to `./models`.
