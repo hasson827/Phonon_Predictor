@@ -23,9 +23,7 @@ class GraphAttentionLayer(nn.Module):
 		self.W_q = nn.Linear(d_model, d_model, bias=False)
 		self.W_k = nn.Linear(d_model, d_model, bias=False)
 		self.W_v = nn.Linear(d_model, d_model, bias=False)
-		# edge bias (E,K)->(E,H)
 		self.W_e = nn.Linear(edge_in_dim, num_heads, bias=False)
-		# edge_vec contribution to values (E,3)->(E,d)
 		self.W_ev = nn.Linear(3, d_model, bias=False)
 
 		self.ln = nn.LayerNorm(d_model)
