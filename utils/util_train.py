@@ -3,7 +3,7 @@ import torch
 from torch_geometric.loader import DataLoader
 import math
 import time
-from utils.util_plot import generate_dataframe, plot_bands, plot_loss, plot_test_loss
+from utils.util_plot import generate_dataframe, plot_bands, plot_loss, plot_test_loss, compare_models
 from config_file import palette, seedn 
 torch.autograd.set_detect_anomaly(True)
 
@@ -28,25 +28,33 @@ def loglinspace(rate, step, end=None):
 
 
 def train(model, optimizer, train_set, train_nums, test_set, 
-          loss_fn, run_name, max_iter, scheduler, device, 
-          batch_size, k_fold, factor=1000, conf_dict=None):
+        loss_fn, run_name, max_iter, scheduler, device, 
+        batch_size, k_fold, factor=1000, conf_dict=None):
     model.to(device)
     checkpoint_generator = loglinspace(0.3, 5)
     checkpoint = next(checkpoint_generator)
     start_time = time.time()
     record_lines = []
     
+    # Ensure output directories exist
+    models_dir = './models'
+    results_dir = './results'
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
+    
+    weights_path = os.path.join(models_dir, run_name + '.torch')
+    
     try:
-        print('Use model.load_state_dict to load the existing model: ' + run_name + '.torch')
-        model.load_state_dict(torch.load(run_name + '.torch')['state'])
+        print('Use model.load_state_dict to load the existing model: ' + weights_path)
+        model.load_state_dict(torch.load(weights_path)['state'])
     except:
         print('There is no existing model')
         results = {}
         history = []
         s0 = 0
     else:
-        print('Use torch.load to load the existing model: ' + run_name + '.torch')
-        results = torch.load(run_name + '.torch')
+        print('Use torch.load to load the existing model: ' + weights_path)
+        results = torch.load(weights_path)
         history = results['history']
         s0 = history[-1]['step'] + 1
     
@@ -104,27 +112,31 @@ def train(model, optimizer, train_set, train_nums, test_set,
                   f"Valid Loss: {valid_avg_loss:.6f}    " + 
                   f"elapsed time = {time.strftime('%H:%M:%S', time.gmtime(wall))}")
             
-            save_name = f'./models/{run_name}'
-            with open(save_name + '.torch', 'wb') as f:
+            # Save weights to models dir, results to results dir
+            weights_save_prefix = os.path.join(models_dir, run_name)
+            results_save_prefix = os.path.join(results_dir, run_name)
+
+            with open(weights_save_prefix + '.torch', 'wb') as f:
                 torch.save(results, f)
             
             record_line = '%d\t%.20f\t%.20f'%(step,train_avg_loss,valid_avg_loss)
             record_lines.append(record_line)
-            plot_loss(history, save_name + '_loss')
-            plot_test_loss(model, test_loader, loss_fn, device, save_name + '_loss_test')
+            plot_loss(history, results_save_prefix + '_loss')
+            plot_test_loss(model, test_loader, loss_fn, device, results_save_prefix + '_loss_test')
             
             df_train = generate_dataframe(model, train_loader, loss_fn, device, factor)
             df_test = generate_dataframe(model, test_loader, loss_fn, device, factor)
-            fig_train = plot_bands(df_train, header = save_name, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
-            fig_test = plot_bands(df_test, header = save_name, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
+            fig_train = plot_bands(df_train, header = results_save_prefix, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
+            fig_test = plot_bands(df_test, header = results_save_prefix, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
         
-        text_file = open(save_name + ".txt", "w")
+        text_file = open(os.path.join(results_dir, run_name) + ".txt", "w")
         for line in record_lines:
             text_file.write(line + "\n")
         text_file.close()
         
         if scheduler is not None:
             scheduler.step()
+    compare_models(df_train, df_test, header=os.path.join(results_dir, run_name), color1=palette[1], color2=palette[3], labels=('Train', 'Test'), size=5, lw=3, r2=True)
 
 
 def load_model(model_class, model_file, device):

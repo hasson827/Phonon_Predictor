@@ -1,13 +1,14 @@
 import os
 import time
 import torch
-
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from utils.util_load import load_band_structure_data
 from utils.util_data import generate_data_dict
 from utils.util_help import make_dict
 from utils.util_train import train
 from utils.util_loss import BandLoss
+from utils.util_plot import plot_element_count_stack
 from models.Predictor import Predictor
 
 from config_file import seedn
@@ -20,6 +21,7 @@ file_name = os.path.basename(__file__)
 print("File Name:", file_name)
 
 model_dir = './models'
+results_dir = './results'
 data_dir = './data'
 raw_dir = './data/phonon'
 data_file = 'DFPT_band_structure.pkl'
@@ -33,16 +35,16 @@ max_iter = 200
 
 node_dim = 118
 edge_dim = 50
-enc_layers = 4
-dec_layers = 4
+enc_layers = 3
+dec_layers = 3
 num_heads = 4
-use_z = True # Whether to use one-hot
-dropout = 0.1
+use_z = False # Whether to use one-hot
+dropout = 0.0
 d_model = 64
 
 r_max = 8
 descriptor = 'mass'
-factor = 1000
+factor = 1
 
 loss_fn = BandLoss()
 loss_fn_name = loss_fn.__class__.__name__
@@ -66,13 +68,21 @@ num = len(data_dict)
 train_nums = [int((num * train_ratio)//k_fold)] * k_fold
 test_num = num - sum(train_nums)
 idx_train, idx_test = train_test_split(range(num), test_size=test_num, random_state=seedn)
-with open(f'./data/idx_{run_name}_train.txt', 'w') as f: 
-    for idx in idx_train: f.write(f"{idx}\n")
-with open(f'./data/idx_{run_name}_test.txt', 'w') as f: 
-    for idx in idx_test: f.write(f"{idx}\n")
 
 dataset = torch.utils.data.Subset(list(data_dict.values()), range(len(data_dict)))
 train_dataset, test_dataset = torch.utils.data.Subset(dataset, idx_train), torch.utils.data.Subset(dataset, idx_test)
+
+
+sites = [len(s.get_positions()) for s in list(data['structure'])]
+fig, ax = plt.subplots(figsize=(6,5))
+ax.hist(sites, bins=max(sites))
+ax.set_xlabel('Atoms/cell')
+ax.set_ylabel('Counts')
+fig.patch.set_facecolor('white')
+plt.savefig(f'{results_dir}/{run_name}_atoms_hist.png', dpi=300)
+plt.close()
+plot_element_count_stack(train_dataset, test_dataset, header=f"{results_dir}/{run_name}", save_fig=True)
+
 
 model = Predictor(
     node_in_dim = node_dim, 
@@ -84,12 +94,15 @@ model = Predictor(
     use_z = use_z,
     dropout = dropout
 )
+num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print('number of parameters: ', num_params)
 
-print(model)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=schedule_gamma)
 
+
 train(model,  optimizer, train_dataset, train_nums, test_dataset, 
       loss_fn, run_name, max_iter, scheduler, device, batch_size, k_fold, 
       factor, conf_dict)
+
