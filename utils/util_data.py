@@ -51,13 +51,17 @@ def atom_feature(atomic_number: int, descriptor: str) -> float:
             return 1.0
 
 
-def create_node_input(atomic_numbers: list, descriptor: str) -> torch.Tensor:
+def create_node_input(atomic_numbers: list, n=None, descriptor: str = 'mass') -> torch.Tensor:
     x = []
+    temp = []
     for atomic_number in atomic_numbers:
-        vec = [0.0] * 118
-        vec[atomic_number - 1] = atom_feature(int(atomic_number), descriptor)
-        x.append(vec)
-    return torch.from_numpy(np.asarray(x, dtype=np.float64))
+        atomic = [0.0] * 118         
+        atomic[atomic_number - 1] = atom_feature(int(atomic_number), descriptor)
+        x.append(atomic)
+        temp += [atomic] * len(atomic_numbers)
+    if n is not None:
+        x += temp * n
+    return torch.from_numpy(np.array(x, dtype = np.float64))
 
 
 def get_node_deg(edge_dst, n):
@@ -90,8 +94,8 @@ def build_data(mpid: str, structure, real: np.ndarray, r_max: float, qpts: np.nd
     numb = len(positions)
     
     atomic_numbers = structure.arrays['numbers']
-    z = create_node_input(atomic_numbers, 'one-hot')
-    x = create_node_input(atomic_numbers, descriptor)
+    z = create_node_input(atomic_numbers, descriptor='one-hot')
+    x = create_node_input(atomic_numbers, descriptor=descriptor)
     y = torch.from_numpy(real/factor).unsqueeze(0)
     node_deg = get_node_deg(edge_dst, len(x))
     

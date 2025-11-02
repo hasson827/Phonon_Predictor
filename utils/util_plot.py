@@ -10,6 +10,8 @@ import sklearn
 import time
 from config_file import palette, seedn, save_extension
 from utils.util_help import chemical_symbols, sub
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 def save_figure(fig, filename, title = None):
@@ -283,7 +285,7 @@ def get_element_statistics(data_set):
     return stats
 
 
-def plot_element_count_stack(data_set1, data_set2, header=None, title=None, bar_colors=['#90BE6D', '#277DA1'], save_fig=False):
+def plot_element_count_stack(data_set1, data_set2, header=None, title=None, bar_colors=['#90BE6D', '#277DA1'], save_fig=True):
     stats1 = get_element_statistics(data_set1)
     stats2 = get_element_statistics(data_set2)
     
@@ -315,5 +317,5 @@ def plot_element_count_stack(data_set1, data_set2, header=None, title=None, bar_
     
     if save_fig:
         fig.patch.set_facecolor('white')
-        fig.savefig(f'{header}_element_count_{title}.{save_extension}')
-        save_figure(fig, f'{header}_element_count_{title}', title=title)
+        fig.savefig(f'{header}_element_count.{save_extension}')
+        save_figure(fig, f'{header}_element_count', title=title)
