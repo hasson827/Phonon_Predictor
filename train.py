@@ -67,9 +67,21 @@ def main():
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=TRAIN_CONFIG['schedule_gamma'])
     
     # main training & evaluation loop
-    train(model, optimizer, train_dataset, train_nums, test_dataset,
-        loss_fn, scheduler, device, DIR_CONFIG, TRAIN_CONFIG, DATA_CONFIG)
+    train(
+        model = model, 
+        optimizer = optimizer, 
+        train_set = train_dataset, 
+        train_nums = train_nums, 
+        test_set = test_dataset,
+        loss_fn = loss_fn, 
+        scheduler = scheduler, 
+        device = device, 
+        DIR_CONFIG = DIR_CONFIG, 
+        TRAIN_CONFIG = TRAIN_CONFIG, 
+        DATA_CONFIG = DATA_CONFIG, 
+        MODEL_CONFIG = MODEL_CONFIG
+    )
     
-
+    
 if __name__ == '__main__':
     main()
