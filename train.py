@@ -3,8 +3,8 @@ import torch
 from utils.util_load import load_band_structure_data
 from utils.util_data import generate_data_dict
 from utils.util_train import split_dataset, train
-from utils.util_loss import BandLoss
 from utils.util_plot import plot_atom_count_histogram
+from utils.util_loss import BandLoss
 from models.Predictor import Predictor
 
 DIR_CONFIG = dict(
@@ -27,12 +27,14 @@ DATA_CONFIG = dict(
 MODEL_CONFIG = dict(
     node_in_dim = 118, # The input dimension of node features
     edge_in_dim = 50, # The input dimension of edge features
-    enc_layers = 3, # The number of encoder layers
-    dec_layers = 3, # The number of decoder layers
+    enc_layers = 6, # The number of encoder layers
+    dec_layers = 6, # The number of decoder layers
     fourier_n = 16, # The number of Fourier features for distance encoding
     num_heads = 8, # The number of attention heads
     dropout = 0.1, # The dropout rate
-    d_model = 64 # The dimension of model embeddings
+    d_model = 256, # The dimension of model embeddings
+    num_bases = 8, # The number of bases
+    mlp_ratio = 2.0 # The MLP ratio in GraphEncoder
 )
 
 TRAIN_CONFIG = dict(
@@ -40,28 +42,32 @@ TRAIN_CONFIG = dict(
     batch_size = 1, # The batch size
     k_fold = 5, # The number of folds for k-fold cross-validation
     max_iter = 1000, # The maximum number of training iterations
-    learning_rate = 5e-3, # The learning rate
-    weight_decay = 5e-2, # The weight decay for optimizer
-    schedule_gamma = 0.96 # The gamma for learning rate scheduler
+    learning_rate = 3e-3, # The learning rate
+    weight_decay = 1e-2, # The weight decay for optimizer
+    schedule_gamma = 0.95, # The gamma for learning rate scheduler
+    use_ema = True, # Whether to enable EMA tracking
+    ema_decay = 0.999, # The decay rate for EMA
+    ema_start = 100, # The training step to start applying EMA weights
 )
 
 def main():
-    device = torch.device('cuda' if torch.cuda.is_available() 
-                        else 'mps' if torch.backends.mps.is_available()
-                        else 'cpu')
+    # Basic Setup
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.set_default_dtype(torch.float64)
-    
     loss_fn = BandLoss()
-    data = load_band_structure_data(DIR_CONFIG)
-    data_dict = generate_data_dict(data, DATA_CONFIG)
-    plot_atom_count_histogram(data, DIR_CONFIG)
-    train_dataset, test_dataset, train_nums = split_dataset(data_dict, TRAIN_CONFIG)
     
+    data = load_band_structure_data(DIR_CONFIG) # Load data
+    data_dict = generate_data_dict(data, DATA_CONFIG) # Generate data dict
+    plot_atom_count_histogram(data, DIR_CONFIG) # Plot atom count histogram
+    train_dataset, test_dataset, train_nums = split_dataset(data_dict, TRAIN_CONFIG) # Split dataset
+    
+    # Model, Optimizer, Scheduler Setup
     model = Predictor(**MODEL_CONFIG).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=TRAIN_CONFIG['learning_rate'], weight_decay=TRAIN_CONFIG['weight_decay'])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=TRAIN_CONFIG['schedule_gamma'])
     
-    train(model, optimizer, train_dataset, train_nums, test_dataset, 
+    # main training & evaluation loop
+    train(model, optimizer, train_dataset, train_nums, test_dataset,
         loss_fn, scheduler, device, DIR_CONFIG, TRAIN_CONFIG, DATA_CONFIG)
     
 
