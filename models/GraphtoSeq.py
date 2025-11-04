@@ -49,7 +49,6 @@ class GraphtoSeq(nn.Module):
 			}) for _ in range(max(1, token_layers))
 		])
 		self.head = nn.Linear(d_model, 1, bias=True)
-		self.base_norm = nn.LayerNorm(d_model)
 		self.token_norm = nn.LayerNorm(d_model)
 
 	def forward(self, H: Tensor, qpts: Tensor) -> Tensor:
@@ -61,7 +60,6 @@ class GraphtoSeq(nn.Module):
 		scale_shift = self.q_base_film(z).view(Q, self.num_bases, 2, d)
 		scale, shift = torch.unbind(scale_shift, dim=2)
 		bases = bases.unsqueeze(0) * (1.0 + scale) + shift  # [Q, num_bases, d]
-		bases = self.base_norm(bases)
 		tokens, _ = self.atom_base_attn(atom_queries, bases, bases)
 		tokens = self.token_norm(tokens + atom_queries)
 		for blk in self.blocks:
