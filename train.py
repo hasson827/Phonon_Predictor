@@ -1,12 +1,10 @@
-import os
 import time
 import torch
-import matplotlib.pyplot as plt
 from utils.util_load import load_band_structure_data
 from utils.util_data import generate_data_dict
-from utils.util_train import split_dataset, count_param, train
+from utils.util_train import split_dataset, train
 from utils.util_loss import BandLoss
-from utils.util_plot import plot_element_count_stack, plot_atom_count_histogram
+from utils.util_plot import plot_atom_count_histogram
 from models.Predictor import Predictor
 
 DIR_CONFIG = dict(
@@ -58,10 +56,10 @@ def main():
     data_dict = generate_data_dict(data, DATA_CONFIG)
     plot_atom_count_histogram(data, DIR_CONFIG)
     train_dataset, test_dataset, train_nums = split_dataset(data_dict, TRAIN_CONFIG)
+    
     model = Predictor(**MODEL_CONFIG).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=TRAIN_CONFIG['learning_rate'], weight_decay=TRAIN_CONFIG['weight_decay'])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=TRAIN_CONFIG['schedule_gamma'])
-    count_param(model)
     
     train(model, optimizer, train_dataset, train_nums, test_dataset, 
         loss_fn, scheduler, device, DIR_CONFIG, TRAIN_CONFIG, DATA_CONFIG)

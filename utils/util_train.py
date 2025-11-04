@@ -27,7 +27,7 @@ def split_dataset(data_dict: dict, TRAIN_CONFIG: dict) -> Tuple[Dataset, Dataset
 
 def count_param(model):
     num = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Size of Model: {num / 1e6:.2f} MB")
+    return num
 
 
 def evaluate(model, dataloader, loss_fn, device):
@@ -52,6 +52,7 @@ def loglinspace(rate, step, end=None):
 
 def train(model, optimizer, train_set, train_nums, test_set, 
         loss_fn, scheduler, device,  DIR_CONFIG, TRAIN_CONFIG, DATA_CONFIG):
+    num_params = count_param(model)
     model.to(device)
     checkpoint_generator = loglinspace(0.3, 5)
     checkpoint = next(checkpoint_generator)
@@ -83,6 +84,7 @@ def train(model, optimizer, train_set, train_nums, test_set,
     history = []
     s0 = 0
     
+    
     train_sets = torch.utils.data.random_split(train_set, train_nums)
     
     fold_loaders = []    
@@ -107,6 +109,7 @@ def train(model, optimizer, train_set, train_nums, test_set,
             loss.backward()
             optimizer.step()
         scheduler.step()
+        results_save_prefix = os.path.join(run_dir, f"step_{step}")
 
         if step == checkpoint:
             checkpoint = next(checkpoint_generator)
@@ -127,22 +130,19 @@ def train(model, optimizer, train_set, train_nums, test_set,
                 results = {'history': history, 'state': model.state_dict()}
                 with open(weights_path, 'wb') as f:
                     torch.save(results, f)
+                df_train = generate_dataframe(model, train_loader, loss_fn, device, factor)
+                df_test = generate_dataframe(model, test_loader, loss_fn, device, factor)
+                plot_bands(df_train, header = results_save_prefix, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
+                plot_bands(df_test, header = results_save_prefix, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
 
             record_lines.append(f"{step}\t{train_avg_loss:.20f}\t{valid_avg_loss:.20f}")
             metrics_path = os.path.join(run_dir, f"metrics.txt")
             with open(metrics_path, "w") as f:
-                f.write("step\ttrain_loss\tvalid_loss\n")
+                f.write(f"Number of parameters: {num_params}\nstep\ttrain_loss\tvalid_loss\n")
                 for line in record_lines:
                     f.write(line + "\n")
             
-            results_save_prefix = os.path.join(run_dir, f"step_{step}")
             plot_loss(history, os.path.join(run_dir, "loss_curve"))
-            
-            df_train = generate_dataframe(model, train_loader, loss_fn, device, factor)
-            df_test = generate_dataframe(model, test_loader, loss_fn, device, factor)
-            plot_bands(df_train, header = results_save_prefix, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
-            plot_bands(df_test, header = results_save_prefix, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
-
     compare_models(df_train, df_test, dir=run_dir, labels=('Train', 'Test'), size=5, lw=3)
 
 
