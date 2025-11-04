@@ -1,6 +1,3 @@
-import torch
-import copy
-
 class EMA:
     def __init__(self, model, decay=0.999):
         self.model = model

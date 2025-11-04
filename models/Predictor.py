@@ -3,7 +3,7 @@ from torch import nn, Tensor
 from torch_geometric.data import Data
 
 from models.GraphEncoder import GraphEncoder
-from models.GraphtoSeq import Graph2SeqDecoder
+from models.GraphtoSeq import GraphtoSeq
 
 class Predictor(nn.Module):
 	def __init__(self,
@@ -11,9 +11,9 @@ class Predictor(nn.Module):
 				 d_model: int = 32,
 				 num_heads: int = 4,
 				 enc_layers: int = 4,
-				 edge_in_dim: int = 50,
 				 dec_layers: int = 2,
-				 use_z: bool = True,
+				 edge_in_dim: int = 50,
+				 fourier_n: int = 16,
 				 dropout: float = 0.0):
 		super().__init__()
 		self.encoder = GraphEncoder(
@@ -23,13 +23,13 @@ class Predictor(nn.Module):
 			num_heads=num_heads,
 			edge_in_dim=edge_in_dim,
 			dropout=dropout,
-			use_z=use_z,
 		)
-		self.decoder = Graph2SeqDecoder(
+		self.decoder = GraphtoSeq(
 			d_model=d_model,
 			num_heads=num_heads,
-			num_layers=dec_layers,
+			fourier_n=fourier_n,
 			dropout=dropout,
+			token_layers=dec_layers
 		)
 
 	def forward(self, data) -> Tensor:

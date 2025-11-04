@@ -1,3 +1,4 @@
+import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
@@ -5,7 +6,6 @@ import pandas as pd
 from scipy.stats import gaussian_kde
 from matplotlib.ticker import FormatStrFormatter
 from ase import Atom
-from copy import copy
 import sklearn
 import time
 from config_file import palette, seedn, save_extension
@@ -13,14 +13,18 @@ from utils.util_help import chemical_symbols, sub
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-
-def save_figure(fig, filename, title = None):
+def save_figure(fig, filename, title):
+    """Save figure with white background and title."""
     fig.patch.set_facecolor('white')
-    if title:
-        fig.suptitle(title, ha='center', y=1., fontsize=16)
+    fig.suptitle(title, ha='center', y=1., fontsize=16)
     fig.tight_layout()
     fig.subplots_adjust(hspace=0.6)
-    fig.savefig(f"{filename}.{save_extension}")
+    output_path = f"{filename}.{save_extension}"
+    directory = os.path.dirname(output_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
 
 
 def plot_loss(history, filename):
@@ -35,25 +39,6 @@ def plot_loss(history, filename):
     ax.set_ylabel('Loss')
     ax.legend()
     save_figure(fig, filename, title="Loss Curve")
-
-
-def plot_test_loss(model, dataloader, loss_fn, device, filename):
-    model.eval()
-    model.to(device)
-    loss_test = []
-    
-    with torch.inference_mode():
-        for data in dataloader:
-            data.to(device)
-            output = model(data)
-            loss = loss_fn(output, data.y).cpu()
-            loss_test.append(loss.item())
-    
-    fig, ax = plt.subplots(figsize=(6, 5))
-    ax.plot(np.array(loss_test), label=f"Testing Loss: {np.mean(loss_test)}", color=palette[3])
-    ax.set_ylabel("Loss")
-    ax.legend()
-    save_figure(fig, filename, title="Test Loss")
 
 
 def simname(symbol):
@@ -73,145 +58,127 @@ def simname(symbol):
     return name
 
 
-def loss_dist_general(axl, df, num, palette, tile_losses, fontsize, axis='y'):
-    loss_min, loss_max = df['loss'].min(), df['loss'].max()
-    points = np.linspace(loss_min, loss_max, 5000)
-    kde = gaussian_kde(list(df['loss']))
-    density = kde.pdf(points)
-
-    if axis == 'y':
-        axl.plot(density, points, color='black')
-    else:
-        axl.plot(points, density, color='black')
-    
-    cols = palette[:num]
-    cols_rev = copy(cols)
-    cols_rev.reverse()
-    quantiles = list(tile_losses)[::-1] + [0]
-    
-    for i in range(len(quantiles) - 1):
-        if axis == 'y':
-            axl.fill_between([density.min(), density.max()], y1=[quantiles[i], quantiles[i]], y2=[quantiles[i+1], quantiles[i+1]], color=cols_rev[i], lw=0, alpha=0.5)
-        else:
-            axl.fill_between(points, density, where=(points >= quantiles[i+1]) & (points <= quantiles[i]), color=cols_rev[i], lw=0, alpha=0.5)
-    
-    if axis == 'y':
-        axl.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
-        axl.invert_yaxis()
-        axl.set_xticks([])
-        axl.set_yscale('log')
-        axl.tick_params(axis='y', which='major', labelsize=fontsize)
-        axl.tick_params(axis='y', which='minor', labelsize=fontsize)
-        axl.yaxis.set_minor_formatter(FormatStrFormatter("%.5f"))
-        axl.yaxis.set_major_formatter(FormatStrFormatter("%.5f"))
-    else:
-        axl.ticklabel_format(axis='x', style='sci', scilimits=(0, 0))
-        axl.set_yticks([])
-        axl.set_xscale('log')
-        axl.tick_params(axis='x', which='major', labelsize=fontsize, rotation=90)
-        axl.tick_params(axis='x', which='minor', labelsize=fontsize, rotation=90)
-        axl.xaxis.set_minor_formatter(FormatStrFormatter("%.5f"))
-        axl.xaxis.set_major_formatter(FormatStrFormatter("%.5f"))
-        
-        axl.spines['top'].set_visible(False)
-        axl.spines['right'].set_visible(False)
-        axl.spines['left'].set_visible(False)
-    return axl, cols
-
-
 def generate_dataframe(model, dataloader, loss_fn, device, factor=1000):
-    df = pd.DataFrame(columns=['id', 'name', 'loss', 'real', 'pred', 'time', 'numb'])
-    with torch.no_grad():
+    rows = []
+    model.eval()
+    with torch.inference_mode():
         for d in dataloader:
-            try:
-                d.to(device)
-                start_time = time.time()
-                output = model(d)
-                run_time = time.time() - start_time
-                if loss_fn is not None:
-                    loss = loss_fn(output, d.y).cpu().item()
-                else: 
-                    loss = 0
+            d = d.to(device)
+            o = model(d)
+            l = loss_fn(o, d.y).item()
+            real = d.y.squeeze(0).detach().cpu().numpy() * factor
+            pred = o.squeeze(0).detach().cpu().numpy() * factor
+            rows.append({'id': d.id, 'name': d.symbol[0], 'loss': l, 'real': real, 'pred': pred, 'numb': int(d.numb)})
+    return pd.DataFrame(rows)
 
-                real = d.y.cpu().numpy() * factor
-                pred = output.cpu().numpy() * factor
-                rrr = {'id': d.id, 'name': d.symbol, 'loss': loss, 'real': list(real), 'pred': list(np.array([pred])), 'time': run_time, 'numb': d.numb.cpu()}
-                df0 = pd.DataFrame(data = rrr)
-                df = pd.concat([df, df0], ignore_index=True)
-            except Exception as e:
-                print(e, d.id)
-                continue
-    return df
 
-def plot_general(df_in, header, title=None, n=5, m=1, num=3, lwidth=0.5, windowsize=(3, 2), palette=palette, formula=True, plot_func=None, plot_real=True, save_lossx=False, seed=seedn):
+def plot_atom_count_histogram(data, DIR_CONFIG, bins=None, figsize=(6, 5)):
+    counts = [len(structure) for structure in data['structure']]
+    if len(counts) == 0:
+        return None
+    if bins is None:
+        bins = range(1, max(counts) + 2)
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.hist(counts, bins=bins, color=palette[0])
+    ax.set_xlabel('Atoms/Cell')
+    ax.set_ylabel('Counts')
+    os.makedirs(DIR_CONFIG['results_dir'], exist_ok=True)
+    save_path = os.path.join(DIR_CONFIG['results_dir'], f"atoms_hist")
+    save_figure(fig, save_path, title='Atoms per Cell')
+    return counts
+
+
+def plot_bands(df_in, header, title=None, n=5, m=1, num=3, lwidth=0.5, windowsize=(3, 2), palette=palette, formula=True, plot_real=True, save_lossx=False, seed=seedn):
     if seed is not None:
         np.random.seed(seed)
-    
     fontsize = 10
-    df_sorted = df_in.iloc[np.argsort(df_in['loss'])].reset_index(drop = True)
-    tiles = np.arange(1, num + 1)/num
-    tile_losses = np.quantile(df_sorted['loss'], tiles)
-    idx_q = [0] + [np.argmin(np.abs(df_sorted['loss'] - tile_loss)) for tile_loss in tile_losses]
-    replace = True if len(df_sorted) < n * m * num else False
-    s = np.concatenate([np.sort(np.random.choice(np.arange(idx_q[k], idx_q[k+1], 1), size=m * n, replace=replace)) for k in range(num)])
-    
+    df_sorted = df_in.iloc[np.argsort(df_in['loss'])].reset_index(drop=True)
+    losses = df_sorted['loss'].to_numpy()
+    segments = [seg for seg in np.array_split(np.arange(len(df_sorted)), num) if len(seg) > 0]
+    segment_count = len(segments)
+    total_slots = segment_count * n * m
+    choices = []
+    for seg in segments:
+        picks = np.random.choice(seg, size=n * m, replace=len(seg) < n * m)
+        choices.extend(np.sort(picks))
+    choices = np.array(choices[:total_slots])
+    colors = palette[:segment_count]
+    cols = np.repeat(colors, n * m)
+    bounds = [losses[segments[0][0]]] + [losses[seg[-1]] for seg in segments]
+    if len(losses) > 1:
+        x_vals = np.linspace(losses.min(), losses.max(), 1000)
+        p_vals = gaussian_kde(losses)(x_vals)
+    else:
+        x_vals = np.array([losses[0]])
+        p_vals = np.ones_like(x_vals)
     if save_lossx:
-        fig0, axl0 = plt.subplots(1, 1, figsize=(18, 2))
-        axl0, cols0 = loss_dist_general(axl0, df_sorted, num, palette, tile_losses, fontsize, axis='x')
+        fig0, ax0 = plt.subplots(1, 1, figsize=(18, 2))
+        ax0.plot(x_vals, p_vals, color='black')
+        for idx, color in enumerate(colors):
+            mask = (x_vals >= bounds[idx]) & (x_vals <= bounds[idx + 1])
+            ax0.fill_between(x_vals, p_vals, where=mask, color=color, alpha=0.5)
+        ax0.set_yticks([])
+        ax0.set_xscale('log')
+        ax0.tick_params(axis='x', which='major', labelsize=fontsize, rotation=90)
+        ax0.tick_params(axis='x', which='minor', labelsize=fontsize, rotation=90)
+        ax0.xaxis.set_minor_formatter(FormatStrFormatter("%.5f"))
+        ax0.xaxis.set_major_formatter(FormatStrFormatter("%.5f"))
+        ax0.spines['top'].set_visible(False)
+        ax0.spines['right'].set_visible(False)
+        ax0.spines['left'].set_visible(False)
         fig0.savefig(f"{header}_{title}_dist.{save_extension}")
-        
-    fig, axs = plt.subplots(num * m, n + 1, figsize=((n + 1) * windowsize[1], num * m * windowsize[0]), gridspec_kw={'width_ratios': [0.7] + [1] * n})
+        plt.close(fig0)
+    rows = segment_count * m
+    fig, axs = plt.subplots(rows, n + 1, figsize=((n + 1) * windowsize[1], rows * windowsize[0]), gridspec_kw={'width_ratios': [0.7] + [1] * n})
+    axs = np.atleast_2d(axs)
     gs = axs[0, 0].get_gridspec()
     for ax in axs[:, 0]:
         ax.remove()
-        
     axl = fig.add_subplot(gs[:, 0])
-    axl, cols = loss_dist_general(axl, df_sorted, num, palette, tile_losses, fontsize, axis='y')
-
-    cols = np.repeat(cols, n * m)
+    axl.plot(p_vals, x_vals, color='black')
+    for idx, color in enumerate(colors[::-1]):
+        lower = bounds[len(bounds) - idx - 2]
+        upper = bounds[len(bounds) - idx - 1]
+        axl.fill_between([p_vals.min(), p_vals.max()], [lower, lower], [upper, upper], color=color, alpha=0.5)
+    axl.invert_yaxis()
+    axl.set_xticks([])
+    axl.set_yscale('log')
+    axl.tick_params(axis='y', which='major', labelsize=fontsize)
+    axl.tick_params(axis='y', which='minor', labelsize=fontsize)
+    axl.yaxis.set_minor_formatter(FormatStrFormatter("%.5f"))
+    axl.yaxis.set_major_formatter(FormatStrFormatter("%.5f"))
     axs = axs[:, 1:].ravel()
-    
     id_list = []
-    for k in range(num * m * n):
-        ax = axs[k]
-        i = s[k]
-        real, pred = df_sorted.iloc[i]['real'], df_sorted.iloc[i]['pred']
-        plot_func(ax, real, pred, cols[k], lwidth, plot_real=plot_real)
-
-        if formula:
-            ax.set_title(simname(df_sorted.iloc[i]['name']).translate(sub), fontsize=fontsize * 1.8)
+    for idx, choice in enumerate(choices):
+        ax = axs[idx]
+        row = df_sorted.iloc[choice]
+        real = np.asarray(row['real'])
+        pred = np.asarray(row['pred'])
+        q = pred.shape[0]
+        x_axis = np.arange(q)
+        if plot_real:
+            if real.ndim == 1:
+                ax.plot(x_axis, real, color='k', linewidth=lwidth * 0.8)
+            else:
+                for col in range(real.shape[1]):
+                    ax.plot(x_axis, real[:, col], color='k', linewidth=lwidth * 0.6, alpha=0.6)
+        if pred.ndim == 1:
+            ax.plot(x_axis, pred, color=cols[idx], linewidth=lwidth)
         else:
-            ax.set_title(df_sorted.iloc[i]['id'], fontsize=fontsize * 1.8)
-        id_list.append(df_sorted.iloc[i]['id'])
+            for col in range(pred.shape[1]):
+                ax.plot(x_axis, pred[:, col], color=cols[idx], linewidth=lwidth)
+        if formula:
+            ax.set_title(simname(row['name']).translate(sub), fontsize=fontsize * 1.8)
+        else:
+            ax.set_title(row['id'], fontsize=fontsize * 1.8)
+        id_list.append(row['id'])
         ax.tick_params(axis='y', which='major', labelsize=fontsize)
-
     save_figure(fig, f"{header}_{title}", title=title)
-    print(id_list)
-    return fig
 
 
-def plot_band(ax, real, pred, color, lwidth, qticks=None, plot_real=True, ylabel=False):
-    xpts = pred.shape[0]
-    if plot_real and real is not None:
-        ax.plot(range(xpts), real, color='k', linewidth=lwidth * 0.8)
-    ax.plot(range(xpts), pred, color=color, linewidth=lwidth)
-    if qticks is not None:
-        ax.set_xticks(range(xpts))
-        qticks = [f"${txt}$" if not '$' in txt and len(txt) > 0 else txt for txt in qticks]
-        ax.set_xticklabels(qticks, fontsize=10)
-        ax.tick_params(axis='x', which='both', bottom=False, top=False)
-    if ylabel:
-        ax.set_ylabel(r'$\omega\ (\mathrm{cm}^{-1})$')
-
-
-def plot_bands(df_in, header, title=None, n=5, m=1, lwidth=0.5, windowsize=(3, 2), palette=palette, formula=True, plot_real=True, save_lossx=False, seed=seedn):
-    return plot_general(df_in=df_in, header=header, title=title, 
-                        n=n, m=m, num=3, lwidth=lwidth, windowsize=windowsize, 
-                        palette=palette, formula=formula, plot_func=plot_band, 
-                        plot_real=plot_real, save_lossx=save_lossx, seed=seed)
-
-
-def compare_models(df1, df2, header, color1, color2, labels=('Model1', 'Model2'), size=5, lw=3, r2=False):
+def compare_models(df1, df2, dir, labels=('Model1', 'Model2'), size=5, lw=3):
+    color1 = palette[1]
+    color2 = palette[3]
     re_out1 = np.concatenate([df1.iloc[i]['real'].flatten() for i in range(len(df1))])
     pr_out1 = np.concatenate([df1.iloc[i]['pred'].flatten() for i in range(len(df1))])
     re_out2 = np.concatenate([df2.iloc[i]['real'].flatten() for i in range(len(df2))])
@@ -244,10 +211,9 @@ def compare_models(df1, df2, header, color1, color2, labels=('Model1', 'Model2')
     ax1.set_ylabel('Predicted $\omega$ [$cm^{-1}$]', fontsize=14)
     ax1.legend()
     
-    if r2:
-        R2_1 = sklearn.metrics.r2_score(y_true=re_out1, y_pred=pr_out1)
-        R2_2 = sklearn.metrics.r2_score(y_true=re_out2, y_pred=pr_out2)
-        ax1.set_title(f"$R^2 [1]: {R2_1:.3f}$\t$ [2]: {R2_2:.3f}$", fontsize=14)
+    R2_1 = sklearn.metrics.r2_score(y_true=re_out1, y_pred=pr_out1)
+    R2_2 = sklearn.metrics.r2_score(y_true=re_out2, y_pred=pr_out2)
+    ax1.set_title(f"$R^2 [1]: {R2_1:.3f}$\t$ [2]: {R2_2:.3f}$", fontsize=14)
 
     ax2 = axs[1]
     ax2.plot(x1_loss, p1, color=color1, label=labels[0], lw=lw)
@@ -268,8 +234,8 @@ def compare_models(df1, df2, header, color1, color2, labels=('Model1', 'Model2')
     ax2.set_ylabel('Probability density', fontsize=14)
     ax2.legend()
     
-    fig.suptitle(f'{labels[0]} vs {labels[1]} Comparison', ha='center', y=0.98, fontsize=16)
-    save_figure(fig, f"{header}_model_comparison", title=None)
+    file_name = os.path.join(dir, "model_comparison")
+    save_figure(fig, file_name, title=f'{labels[0]} vs {labels[1]} Comparison')
 
 
 def get_element_statistics(data_set):
@@ -285,7 +251,8 @@ def get_element_statistics(data_set):
     return stats
 
 
-def plot_element_count_stack(data_set1, data_set2, header=None, title=None, bar_colors=['#90BE6D', '#277DA1'], save_fig=True):
+def plot_element_count_stack(data_set1, data_set2, dir, title):
+    bar_colors=['#90BE6D', '#277DA1']
     stats1 = get_element_statistics(data_set1)
     stats2 = get_element_statistics(data_set2)
     
@@ -312,10 +279,7 @@ def plot_element_count_stack(data_set1, data_set2, header=None, title=None, bar_
         ax.set_ylabel('Counts', fontsize=24)
         ax.legend()
     
-    if title:
-        fig.suptitle(title, ha='center', y=1.0, fontsize=20)
-    
-    if save_fig:
-        fig.patch.set_facecolor('white')
-        fig.savefig(f'{header}_element_count.{save_extension}')
-        save_figure(fig, f'{header}_element_count', title=title)
+    fig.suptitle(title, ha='center', y=1.0, fontsize=20)
+    fig.patch.set_facecolor('white')
+    file_name = os.path.join(dir, f"element_count_stack")
+    save_figure(fig, file_name, title)

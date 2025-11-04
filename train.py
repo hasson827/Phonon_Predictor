@@ -2,107 +2,70 @@ import os
 import time
 import torch
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 from utils.util_load import load_band_structure_data
 from utils.util_data import generate_data_dict
-from utils.util_help import make_dict
-from utils.util_train import train
+from utils.util_train import split_dataset, count_param, train
 from utils.util_loss import BandLoss
-from utils.util_plot import plot_element_count_stack
+from utils.util_plot import plot_element_count_stack, plot_atom_count_histogram
 from models.Predictor import Predictor
 
-from config_file import seedn
-device = torch.device('cuda' if torch.cuda.is_available() 
-                      else 'mps' if torch.backends.mps.is_available()
-                      else 'cpu')
-torch.set_default_dtype(torch.float64)
-
-file_name = os.path.basename(__file__)
-print("File Name:", file_name)
-
-model_dir = './models'
-results_dir = './results'
-data_dir = './data'
-raw_dir = './data/phonon'
-data_file = 'DFPT_band_structure.pkl'
-run_name = time.strftime('%y%m%d-%H%M%S', time.localtime())
-
-train_ratio = 0.9
-batch_size = 1
-k_fold = 5
-max_iter = 200
-
-
-node_dim = 118
-edge_dim = 50
-enc_layers = 3
-dec_layers = 3
-num_heads = 4
-use_z = False # Whether to use one-hot
-dropout = 0.0
-d_model = 64
-
-r_max = 8
-descriptor = 'mass'
-factor = 1
-
-loss_fn = BandLoss()
-loss_fn_name = loss_fn.__class__.__name__
-learning_rate = 5e-3
-weight_decay = 5e-2
-schedule_gamma = 0.96
-
-conf_dict = make_dict([run_name, model_dir, data_dir, raw_dir, data_file, train_ratio, batch_size, k_fold, max_iter, 
-                       node_dim, edge_dim, enc_layers, dec_layers, num_heads, use_z, dropout, d_model,
-                       r_max, descriptor, factor,
-                       loss_fn_name, learning_rate, weight_decay, schedule_gamma, seedn
-                      ])
-for k, v in conf_dict.items():
-    print(f"{k}: {v}")
-
-
-data = load_band_structure_data(data_dir, raw_dir, data_file)
-data_dict = generate_data_dict(data = data, r_max = r_max, descriptor = descriptor, factor = factor)
-
-num = len(data_dict)
-train_nums = [int((num * train_ratio)//k_fold)] * k_fold
-test_num = num - sum(train_nums)
-idx_train, idx_test = train_test_split(range(num), test_size=test_num, random_state=seedn)
-
-dataset = torch.utils.data.Subset(list(data_dict.values()), range(len(data_dict)))
-train_dataset, test_dataset = torch.utils.data.Subset(dataset, idx_train), torch.utils.data.Subset(dataset, idx_test)
-
-
-sites = [len(s.get_positions()) for s in list(data['structure'])]
-fig, ax = plt.subplots(figsize=(6,5))
-ax.hist(sites, bins=max(sites))
-ax.set_xlabel('Atoms/cell')
-ax.set_ylabel('Counts')
-fig.patch.set_facecolor('white')
-plt.savefig(f'{results_dir}/{run_name}_atoms_hist.png', dpi=300)
-plt.close()
-plot_element_count_stack(train_dataset, test_dataset, header=f"{results_dir}/{run_name}", save_fig=True)
-
-
-model = Predictor(
-    node_in_dim = node_dim, 
-    d_model = d_model, 
-    num_heads = num_heads,
-    enc_layers = enc_layers,
-    edge_in_dim = edge_dim,
-    dec_layers = dec_layers,
-    use_z = use_z,
-    dropout = dropout
+DIR_CONFIG = dict(
+    data_dir = './data', # Directory of all data
+    raw_dir = './data/phonon', # Directory of raw data files
+    data_file = 'DFPT_band_structure.pkl', # Processed data file
+    results_dir = './results', # Directory to save results
+    model_dir = './models', # Directory to save models and model architecture
+    run_name = time.strftime('%y%m%d-%H%M%S', time.localtime()) # Name of the current run
 )
-num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print('number of parameters: ', num_params)
 
+DATA_CONFIG = dict(
+    r_max = 8, # The cutoff distance for neighbor list
+    descriptor = 'mass', # The node descriptor type
+    factor = 1000, # The factor to scale the target values
+    edge_K = 50, # The number of Gaussian basis functions for edge features
+    edge_sigma = 0.5 # The width of Gaussian basis functions for edge features
+)
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=schedule_gamma)
+MODEL_CONFIG = dict(
+    node_in_dim = 118, # The input dimension of node features
+    edge_in_dim = 50, # The input dimension of edge features
+    enc_layers = 3, # The number of encoder layers
+    dec_layers = 3, # The number of decoder layers
+    fourier_n = 16, # The number of Fourier features for distance encoding
+    num_heads = 8, # The number of attention heads
+    dropout = 0.1, # The dropout rate
+    d_model = 64 # The dimension of model embeddings
+)
 
+TRAIN_CONFIG = dict(
+    train_ratio = 0.9, # The ratio of training data
+    batch_size = 1, # The batch size
+    k_fold = 5, # The number of folds for k-fold cross-validation
+    max_iter = 1000, # The maximum number of training iterations
+    learning_rate = 5e-3, # The learning rate
+    weight_decay = 5e-2, # The weight decay for optimizer
+    schedule_gamma = 0.96 # The gamma for learning rate scheduler
+)
 
-train(model,  optimizer, train_dataset, train_nums, test_dataset, 
-      loss_fn, run_name, max_iter, scheduler, device, batch_size, k_fold, 
-      factor, conf_dict)
+def main():
+    device = torch.device('cuda' if torch.cuda.is_available() 
+                        else 'mps' if torch.backends.mps.is_available()
+                        else 'cpu')
+    torch.set_default_dtype(torch.float64)
+    
+    loss_fn = BandLoss()
+    data = load_band_structure_data(DIR_CONFIG)
+    data_dict = generate_data_dict(data, DATA_CONFIG)
+    plot_atom_count_histogram(data, DIR_CONFIG)
+    train_dataset, test_dataset, train_nums = split_dataset(data_dict, TRAIN_CONFIG)
+    model = Predictor(**MODEL_CONFIG).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=TRAIN_CONFIG['learning_rate'], weight_decay=TRAIN_CONFIG['weight_decay'])
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=TRAIN_CONFIG['schedule_gamma'])
+    count_param(model)
+    
+    train(model, optimizer, train_dataset, train_nums, test_dataset, 
+        loss_fn, scheduler, device, DIR_CONFIG, TRAIN_CONFIG, DATA_CONFIG)
+    
 
+if __name__ == '__main__':
+    main()
