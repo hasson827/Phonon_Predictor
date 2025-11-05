@@ -89,6 +89,7 @@ def build_data(mpid: str, structure, real: np.ndarray, qpts: np.ndarray, DATA_CO
         "ijSDd", a = structure, cutoff = r_max, self_interaction = True
     )
     edge_attr = gaussian_expansion(edge_len, K=edge_K, r_max=r_max, sigma=edge_sigma)
+    edge_vec = edge_vec / np.linalg.norm(edge_vec, axis=-1, keepdims=True).clip(min=1e-9)
     
     numb = len(positions)
     atomic_numbers = structure.arrays['numbers']
@@ -106,9 +107,8 @@ def build_data(mpid: str, structure, real: np.ndarray, qpts: np.ndarray, DATA_CO
                  'edge_index': torch.stack([torch.LongTensor(edge_src), torch.LongTensor(edge_dst)], dim=0),
                  'edge_vec': torch.tensor(edge_vec, dtype=torch.float64), 
                  'edge_len': edge_attr.clone().detach().to(torch.float64), 
-                 'qpts': torch.tensor(qpts, dtype=torch.float64), 
-                 'r_max': r_max, 
-                 'numb': numb}
+                 'qpts': torch.tensor(qpts, dtype=torch.float64)
+    }
     return Data(**data_dict)
 
 

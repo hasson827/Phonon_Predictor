@@ -26,15 +26,16 @@ DATA_CONFIG = dict(
 
 MODEL_CONFIG = dict(
     node_in_dim = 118, # The input dimension of node features
-    edge_in_dim = 50, # The input dimension of edge features
-    enc_layers = 6, # The number of encoder layers
-    dec_layers = 6, # The number of decoder layers
-    fourier_n = 16, # The number of Fourier features for distance encoding
-    num_heads = 8, # The number of attention heads
-    dropout = 0.1, # The dropout rate
-    d_model = 256, # The dimension of model embeddings
-    num_bases = 8, # The number of bases
-    mlp_ratio = 2.0 # The MLP ratio in GraphEncoder
+    hidden_dim = 128, # The hidden dimension of the model
+    num_encoder_layers = 3, # The number of layers in the Graph Encoder
+    lmax = 1, # The maximum l value for spherical harmonics in the Graph Encoder
+    extra_scalar_dim = 1, # The extra scalar dimension for node features in the Graph Encoder
+    edge_scalar_dim = 50, # The scalar dimension for edge features in the Graph Encoder
+    num_heads = 4, # The number of attention heads in the Graph Decoder
+    num_decoder_layers = 3, # The number of layers in the Graph Decoder
+    mlp_ratio = 2.0, # The MLP ratio in the Graph Decoder
+    fourier_bands = 4, # The number of Fourier bands for q-point encoding in the Graph Decoder
+    dropout = 0.1 # The dropout rate in both Encoder and Decoder
 )
 
 TRAIN_CONFIG = dict(
