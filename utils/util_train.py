@@ -160,9 +160,9 @@ def train(model, optimizer, train_set, train_nums, test_set,
                     torch.save(results, f)
                 df_train = generate_dataframe(model, train_loader, loss_fn, device, factor)
                 df_test = generate_dataframe(model, test_loader, loss_fn, device, factor)
-                plot_bands(df_train, header = results_save_prefix, title = 'train', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
-                plot_bands(df_test, header = results_save_prefix, title = 'test', n = 6, m = 2, palette = palette, formula = True, seed = seedn)
-            
+                plot_bands(df_train, header = results_save_prefix, title = 'train', n = 6, m = 2, palette = palette, seed = seedn)
+                plot_bands(df_test, header = results_save_prefix, title = 'test', n = 6, m = 2, palette = palette, seed = seedn)
+
             # Restore EMA weights if applied
             if ema_applied:
                 ema.restore()

@@ -68,7 +68,7 @@ def generate_dataframe(model, dataloader, loss_fn, device, factor=1000):
             l = loss_fn(o, d.y).item()
             real = d.y.squeeze(0).detach().cpu().numpy() * factor
             pred = o.squeeze(0).detach().cpu().numpy() * factor
-            rows.append({'id': d.id, 'name': d.symbol[0], 'loss': l, 'real': real, 'pred': pred, 'numb': int(d.numb)})
+            rows.append({'id': d.id, 'name': d.symbol[0], 'loss': l, 'real': real, 'pred': pred})
     return pd.DataFrame(rows)
 
 
@@ -88,7 +88,7 @@ def plot_atom_count_histogram(data, DIR_CONFIG, bins=None, figsize=(6, 5)):
     return counts
 
 
-def plot_bands(df_in, header, title=None, n=5, m=1, num=3, lwidth=0.5, windowsize=(3, 2), palette=palette, formula=True, plot_real=True, save_lossx=False, seed=seedn):
+def plot_bands(df_in, header, title=None, n=5, m=1, num=3, lwidth=0.5, windowsize=(3, 2), palette=palette, save_lossx=False, seed=seedn):
     if seed is not None:
         np.random.seed(seed)
     fontsize = 10
@@ -156,21 +156,11 @@ def plot_bands(df_in, header, title=None, n=5, m=1, num=3, lwidth=0.5, windowsiz
         pred = np.asarray(row['pred'])
         q = pred.shape[0]
         x_axis = np.arange(q)
-        if plot_real:
-            if real.ndim == 1:
-                ax.plot(x_axis, real, color='k', linewidth=lwidth * 0.8)
-            else:
-                for col in range(real.shape[1]):
-                    ax.plot(x_axis, real[:, col], color='k', linewidth=lwidth * 0.6, alpha=0.6)
-        if pred.ndim == 1:
-            ax.plot(x_axis, pred, color=cols[idx], linewidth=lwidth)
-        else:
-            for col in range(pred.shape[1]):
-                ax.plot(x_axis, pred[:, col], color=cols[idx], linewidth=lwidth)
-        if formula:
-            ax.set_title(simname(row['name']).translate(sub), fontsize=fontsize * 1.8)
-        else:
-            ax.set_title(row['id'], fontsize=fontsize * 1.8)
+
+        for col in range(real.shape[1]):
+            ax.plot(x_axis, real[:, col], color='k', linewidth=lwidth * 0.6, alpha=0.6)
+            ax.plot(x_axis, pred[:, col], color=cols[idx], linewidth=lwidth * 0.6, alpha=0.6)
+        ax.set_title(simname(row['name']).translate(sub), fontsize=fontsize * 1.8)
         id_list.append(row['id'])
         ax.tick_params(axis='y', which='major', labelsize=fontsize)
     save_figure(fig, f"{header}_{title}", title=title)
